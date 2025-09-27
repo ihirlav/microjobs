@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Backend",
+      "type": "shell",
+      "command": "cd backend && npm install && npm run dev",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Frontend Web",
+      "type": "shell",
+      "command": "cd frontend-web && npm install && npm start",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Frontend Mobile",
+      "type": "shell",
+      "command": "cd frontend-mobile && npm install && npx expo start",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
