@@ -1,29 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { fetchPublicJobs } from './api';
+import { fetchPublicJobs, searchJobs } from './api';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
-import PaymentForm from './PaymentForm';
-import { reserveJob } from './api';
+import PaymentForm from './PaymentForm'; 
 import { useNotification } from './NotificationContext';
 
 const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
 
-// Dummy jobs for demo; in real app, fetch from backend
-const DUMMY_JOBS = [
-  { id: 1, title: 'General cleaning', type: 'Cleaning', price: 200, location: 'Cluj-Napoca', lat: 46.77, lng: 23.59, rating: 4.8 },
-  { id: 2, title: 'Furniture assembly', type: 'Repairs', price: 350, location: 'București', lat: 44.43, lng: 26.10, rating: 4.7 },
-  { id: 3, title: 'Roof repairs', type: 'Repairs', price: 500, location: 'Timișoara', lat: 45.75, lng: 21.23, rating: 4.9 }
-];
-
 function JobMap({ user, onRequestLogin, onAutoReserve, reservationStatus }) {
   const [jobs, setJobs] = useState([]);
-  const [filter, setFilter] = useState({ type: '', minPrice: '', maxPrice: '', minRating: '' });
+  const [searchQuery, setSearchQuery] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
-  const [reservedJobId, setReservedJobId] = useState(null);
-  const [invoiceJobId, setInvoiceJobId] = useState(null);
+  const [reservedJobId, setReservedJobId] = useState(null); // This is used, so we keep it.
   const notify = useNotification();
 
   useEffect(() => {
@@ -37,13 +28,6 @@ function JobMap({ user, onRequestLogin, onAutoReserve, reservationStatus }) {
     }
     loadJobs();
   }, []);
-
-  const filteredJobs = jobs.filter(j =>
-    (!filter.type || j.type === filter.type) &&
-    (!filter.minPrice || j.price >= Number(filter.minPrice)) &&
-    (!filter.maxPrice || j.price <= Number(filter.maxPrice)) &&
-    (!filter.minRating || j.rating >= Number(filter.minRating))
-  );
 
   const handleAcceptJob = async (jobId) => {
     if (!user) onRequestLogin(jobId);
@@ -96,24 +80,30 @@ function JobMap({ user, onRequestLogin, onAutoReserve, reservationStatus }) {
     }
   };
 
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    try {
+      const results = await searchJobs(searchQuery);
+      setJobs(results);
+      notify(`${results.length} results found.`, 'info');
+    } catch {
+      notify('Search failed.', 'error');
+    }
+  };
+
   return (
     <div style={{maxWidth:900, margin:'2rem auto', background:'#fff', borderRadius:16, boxShadow:'0 2px 12px #0001', padding:32}}>
       <h2 style={{textAlign:'center'}}>Job Map (Public Access)</h2>
       <div style={{marginBottom:12, color:'#009975', textAlign:'center', fontWeight:600}}>{reservationStatus}</div>
-      <div style={{display:'flex', gap:16, marginBottom:24}}>
-        <select value={filter.type} onChange={e=>setFilter(f=>({...f, type:e.target.value}))}>
-          <option value="">All types</option>
-          <option value="Cleaning">Cleaning</option>
-          <option value="Repairs">Repairs</option>
-        </select>
-        <input type="number" placeholder="Min price" value={filter.minPrice} onChange={e=>setFilter(f=>({...f, minPrice:e.target.value}))} />
-        <input type="number" placeholder="Max price" value={filter.maxPrice} onChange={e=>setFilter(f=>({...f, maxPrice:e.target.value}))} />
-        <input type="number" placeholder="Min rating" value={filter.minRating} onChange={e=>setFilter(f=>({...f, minRating:e.target.value}))} />
-      </div>
+      <form onSubmit={handleSearch} style={{display:'flex', gap:16, marginBottom:24}}>
+        <input type="search" placeholder="Search for jobs (e.g., 'react developer needed in Cluj')" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{flex:1, padding:12, fontSize:16, borderRadius:8, border:'1px solid #ddd'}} />
+        <button type="submit" style={{background:'#009975', color:'#fff', border:'none', borderRadius:8, padding:'0 24px', fontWeight:700}}>Search</button>
+      </form>
       <div style={{height:400, background:'#e9e4d8', borderRadius:12, marginBottom:24, overflow:'hidden'}}>
         <MapContainer center={[46.77, 23.59]} zoom={6} style={{height:'100%', width:'100%'}}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {filteredJobs.map(job => (
+          {jobs.map(job => (
             <Marker key={job._id || job.id} position={[job.lat, job.lng]}>
               <Popup>
                 <b>{job.title}</b><br/>
@@ -138,7 +128,7 @@ function JobMap({ user, onRequestLogin, onAutoReserve, reservationStatus }) {
         </div>
       )}
       <ul style={{listStyle:'none', padding:0}}>
-        {filteredJobs.map(job => (
+        {jobs.map(job => (
           <li key={job.id} style={{background:'#f9f7f1', borderRadius:8, marginBottom:12, padding:16, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
             <div>
               <b>{job.title}</b> <span style={{color:'#009975'}}>{job.price} RON</span><br/>

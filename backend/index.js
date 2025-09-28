@@ -11,6 +11,8 @@ const aiAgentsRoutes = require('./routes/aiAgents');
 const fiscalRoutes = require('./routes/fiscal');
 const Review = require('./models/Review');
 const User = require('./models/User');
+const Order = require('./models/Order');
+const Message = require('./models/Message');
 
 // AI Agents automation (full automation for jobs, payments, invoices, legal, support)
 const { runAllAgents } = require('./ai_agents');
@@ -69,6 +71,52 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
+// Rută pentru recomandări de joburi bazate pe competențele utilizatorului
+const { authenticate } = require('./middleware/auth');
+app.get('/api/users/recommendations', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !user.skills || user.skills.length === 0) {
+      return res.json([]); // Returnează un array gol dacă utilizatorul nu are competențe
+    }
+
+    // Caută joburi care au tag-uri ce corespund competențelor utilizatorului
+    // și care sunt încă deschise (status 'pending')
+    const recommendedJobs = await Order.find({
+      status: 'pending',
+      tags: { $in: user.skills }, // Potrivire între tag-urile jobului și competențele utilizatorului
+      beneficiary: { $ne: user._id } // Exclude joburile create de utilizatorul însuși
+    }).limit(10).populate('beneficiary', 'firstName lastName');
+
+    res.json(recommendedJobs);
+  } catch (err) {
+    res.status(500).json({ error: 'Eroare la preluarea recomandărilor.' });
+  }
+});
+
+// Rută pentru a marca onboarding-ul ca finalizat
+app.post('/api/users/complete-onboarding', authenticate, async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user.id, { onboardingCompleted: true });
+    res.json({ success: true, message: 'Onboarding completed.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update onboarding status.' });
+  }
+});
+
+// Rută pentru a prelua istoricul mesajelor dintre doi utilizatori
+app.get('/api/chat/:userId1/:userId2', authenticate, async (req, res) => {
+  try {
+    const { userId1, userId2 } = req.params;
+    const messages = await Message.find({
+      $or: [{ from: userId1, to: userId2 }, { from: userId2, to: userId1 }]
+    }).sort({ createdAt: 'asc' });
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch messages.' });
+  }
+});
+
 // Ensure req.user is set if JWT is present (for /orders/:id/reserve)
 const jwt = require('jsonwebtoken');
 app.use((req, res, next) => {
@@ -83,15 +131,42 @@ app.use((req, res, next) => {
 
 // HTTP & WebSocket server
 const server = http.createServer(app);
+const clients = new Map(); // Map<userId, WebSocket>
 const wss = new WebSocket.Server({ server });
+
 wss.on('connection', ws => {
-  ws.on('message', message => {
-    // Broadcast către toți clienții conectați
-    wss.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
+  let userId = null;
+
+  ws.on('message', async (rawMessage) => {
+    const message = JSON.parse(rawMessage);
+
+    if (message.type === 'identify') {
+      userId = message.userId;
+      clients.set(userId, ws);
+      console.log(`[WebSocket] User ${userId} connected.`);
+    } else if (message.type === 'message' && userId) {
+      const { to, text, order } = message;
+
+      // Salvează mesajul în baza de date
+      const dbMessage = new Message({ from: userId, to, text, order });
+      await dbMessage.save();
+
+      // Trimite mesajul către destinatar, dacă este online
+      const recipientWs = clients.get(to);
+      if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+        recipientWs.send(JSON.stringify(dbMessage));
       }
-    });
+
+      // Trimite o confirmare înapoi expeditorului
+      ws.send(JSON.stringify(dbMessage));
+    }
+  });
+
+  ws.on('close', () => {
+    if (userId) {
+      clients.delete(userId);
+      console.log(`[WebSocket] User ${userId} disconnected.`);
+    }
   });
 });
 

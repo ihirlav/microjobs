@@ -1,20 +1,53 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-function Chat() {
+function Chat({ userId }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  const [recipientId] = useState('ID_PROVIDER_1');
   const ws = useRef(null);
 
   useEffect(() => {
+    if (!userId || !recipientId) return;
+
+    // Fetch message history
+    async function fetchHistory() {
+      try {
+        const token = localStorage.getItem('jwt');
+        const res = await fetch(`/api/chat/${userId}/${recipientId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Failed to fetch');
+        setMessages(await res.json());
+      } catch (error) {
+        console.error("Failed to fetch chat history:", error);
+      }
+    }
+    fetchHistory();
+
+    // Setup WebSocket
     ws.current = new window.WebSocket('ws://localhost:5000');
-    ws.current.onmessage = e => setMessages(msgs => [...msgs, e.data]);
+    ws.current.onopen = () => {
+      // Identifică utilizatorul curent la serverul WebSocket
+      ws.current.send(JSON.stringify({ type: 'identify', userId }));
+    };
+    ws.current.onmessage = async (e) => {
+      let newMessageData;
+      if (e.data instanceof Blob) {
+        const text = await e.data.text();
+        newMessageData = JSON.parse(text);
+      } else {
+        newMessageData = JSON.parse(e.data);
+      }
+      setMessages(msgs => [...msgs, newMessageData]);
+    };
     return () => ws.current.close();
-  }, []);
+  }, [userId, recipientId]);
 
   const send = (e) => {
     e && e.preventDefault();
-    if (input && ws.current) {
-      ws.current.send(input);
+    if (input.trim() && ws.current) {
+      const message = { type: 'message', to: recipientId, text: input };
+      ws.current.send(JSON.stringify(message));
       setInput('');
     }
   };
@@ -35,8 +68,15 @@ function Chat() {
     }}>
       <div style={{flex:1, overflowY:'auto', padding:24, background:'#f9f7f1'}}>
         {messages.length === 0 && <div style={{color:'#bbb', textAlign:'center'}}>Niciun mesaj încă.</div>}
-        {messages.map((m,i) => (
-          <div key={i} style={{marginBottom:12, padding:12, background:'#e9e4d8', borderRadius:8, color:'#222', maxWidth:'80%'}}>{m}</div>
+        {messages.map((m) => (
+          <div 
+            key={m._id} 
+            style={{
+              marginBottom: 12, padding: 12, background: m.from === userId ? '#009975' : '#e9e4d8', 
+              color: m.from === userId ? 'white' : '#222', 
+              borderRadius: 8, maxWidth: '80%', alignSelf: m.from === userId ? 'flex-end' : 'flex-start',
+              marginLeft: m.from === userId ? 'auto' : 0
+            }}>{m.text}</div>
         ))}
       </div>
       <form onSubmit={send} style={{display:'flex', padding:16, background:'#e9e4d8', borderTop:'1px solid #eee'}}>
