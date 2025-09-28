@@ -1,32 +1,34 @@
 const express = require('express');
 const router = express.Router();
+const AgentLog = require('../models/AgentLog');
 
-// Dummy logs/state for demo (replace with real DB/logic)
-let agentLogs = {
-  matching: ['Matched 5 jobs in Cluj-Napoca', 'Sent notifications to 3 providers', 'Adjusted price for 2 jobs'],
-  payments: ['Released escrow for 4 jobs', 'Flagged 1 suspicious transaction'],
-  marketing: ['Created 3 Facebook ads', 'Sent push to 12 inactive users'],
-  invoicing: ['Generated 8 invoices', 'Calculated Dubai tax for 1 provider'],
-  legal: ['Checked new EU regulation', 'Processed 2 GDPR requests'],
-  support: ['Auto-replied to 7 tickets', 'Escalated 1 dispute to human team']
-};
+const AGENTS = ['matching', 'marketing', 'invoicing', 'legal', 'payments', 'support'];
 
 // GET /api/ai-agents/status
-router.get('/status', (req, res) => {
-  res.json({ logs: agentLogs });
+router.get('/status', async (req, res) => {
+  try {
+    const logsByAgent = {};
+    for (const agent of AGENTS) {
+      const logs = await AgentLog.find({ agent }).sort({ timestamp: -1 }).limit(5);
+      logsByAgent[agent] = logs.map(log => log.message);
+    }
+    res.json({ logs: logsByAgent });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch agent logs.' });
+  }
 });
 
 // POST /api/ai-agents/payments/approve
 router.post('/payments/approve', (req, res) => {
   // TODO: implement payout approval logic
-  agentLogs.payments.push('Payout approved by admin at ' + new Date().toISOString());
+  new AgentLog({ agent: 'payments', message: 'Payout approved by admin at ' + new Date().toISOString() }).save();
   res.json({ success: true });
 });
 
 // POST /api/ai-agents/payments/decline
 router.post('/payments/decline', (req, res) => {
   // TODO: implement payout decline logic
-  agentLogs.payments.push('Payout declined by admin at ' + new Date().toISOString());
+  new AgentLog({ agent: 'payments', message: 'Payout declined by admin at ' + new Date().toISOString() }).save();
   res.json({ success: true });
 });
 

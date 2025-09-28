@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { loginUser } from './api';
-
 function AuthForm({ onLogin }) {
   const [form, setForm] = useState({ email: '', password: '' });
   const [msg, setMsg] = useState('');

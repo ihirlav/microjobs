@@ -1,0 +1,10 @@
+{
+  "menu": {
+    "profile": "Profile",
+    "joblist": "Job List",
+    "order": "Orders",
+    "auth": "Authentication",
+    "chat": "Chat",
+    "fiscal_dashboard": "Fiscal Dashboard"
+  }
+}
