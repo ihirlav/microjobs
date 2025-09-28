@@ -24,11 +24,11 @@ const OAuthCallback = lazy(() => import('./OAuthCallback'));
 const FiscalDashboard = lazy(() => import('./FiscalDashboard'));
 
 const menu = [
-  { key: 'profile', tKey: 'menu.profile', icon: <AccountCircle /> },
-  { key: 'joblist', tKey: 'menu.joblist', icon: <ListAlt /> },
-  { key: 'order', tKey: 'menu.order', icon: <ShoppingCart /> },
-  { key: 'auth', tKey: 'menu.auth', icon: <Login /> },
-  { key: 'chat', tKey: 'menu.chat', icon: <ChatIcon /> }
+  { key: 'profile', label: 'Profile', icon: <AccountCircle /> },
+  { key: 'joblist', label: 'Job list', icon: <ListAlt /> },
+  { key: 'order', label: 'Order', icon: <ShoppingCart /> },
+  { key: 'auth', label: 'Auth', icon: <Login /> },
+  { key: 'chat', label: 'Chat', icon: <ChatIcon /> }
 ];
 
 function App() {
@@ -80,7 +80,7 @@ function App() {
                 <ListItem key={item.key} disablePadding>
                   <ListItemButton selected={active === item.key} onClick={() => setActive(item.key)}>
                     <ListItemIcon>{item.icon}</ListItemIcon>
-                    <ListItemText primary={t(item.tKey)} />
+                    <ListItemText primary={item.label} />
                   </ListItemButton>
                 </ListItem>
               ))}
